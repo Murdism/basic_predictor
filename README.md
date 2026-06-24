@@ -4,6 +4,10 @@ An LSTM-based trajectory prediction plugin for AVLite that integrates through th
 
 The predictor observes each tracked agent's recent `(x, y)` positions, converts them into relative displacements, runs an LSTM model, and converts the predicted displacements back into future absolute trajectories.
 
+## About AVLite
+
+[AVLite](https://github.com/AV-Lab/avlite) is the host autonomous-vehicle simulation and evaluation framework for this plugin. This repository provides a community prediction strategy that plugs into AVLite's perception pipeline through its public `PredictionStrategy` interface.
+
 ## Overview
 
 ### Prediction Pipeline
@@ -76,7 +80,7 @@ pip install torch
 
 This plugin depends on:
 
-* AVLite
+* [AVLite](https://github.com/AV-Lab/avlite)
 * PyTorch
 
 The plugin is independent of `avlite/extensions/e10_basic_predictor`, but relies on AVLite's public prediction interfaces.
