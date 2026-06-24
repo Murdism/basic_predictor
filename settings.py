@@ -2,6 +2,7 @@ from pathlib import Path
 
 
 _PLUGIN_DIR = Path(__file__).resolve().parent
+CHECKPOINT_DIR = _PLUGIN_DIR / "chekpoint"
 
 
 class ExtensionSettings:
@@ -13,7 +14,7 @@ class ExtensionSettings:
     obs_len: int = 20
     pred_len: int = 30
     device: str = "cuda:0"
-    checkpoint: str = str(_PLUGIN_DIR / "opv2v_best_sec.pth")
+    checkpoint: str = str(CHECKPOINT_DIR / "openv2v.pth")
 
 
 PluginSettings = ExtensionSettings

@@ -98,7 +98,7 @@ class PluginBasicLSTMPredictor(PredictionStrategy):
                 "PluginBasicLSTMPredictor requires torch. Install it with: pip install torch"
             ) from e
 
-        log.warning("[LSTM] torch imported OK, loading model...")
+        log.info("[LSTM] torch imported OK, loading model...")
         self._torch = torch
         requested = torch.device(self._device_str)
         if requested.type == "cuda" and not torch.cuda.is_available():
@@ -122,7 +122,7 @@ class PluginBasicLSTMPredictor(PredictionStrategy):
                 model.load_state_dict(state_dict)
             else:
                 log.error("[LSTM] Checkpoint not found at %s", self._checkpoint)
-                # model = LSTMModel(input_dim=2, output_type="point")
+                raise FileNotFoundError(f"Checkpoint not found: {self._checkpoint}")
             model.to(self._device)
             model.eval()
             self._model = model
@@ -160,9 +160,11 @@ class PluginBasicLSTMPredictor(PredictionStrategy):
         # 1. accumulate history at model FPS
         histories = self._history.update(agents)
 
-        self._ensure_model()
+        # 2. lazy load model if not already loaded
+        if self._model is None:
+            self._ensure_model()
 
-        # 2. preprocess: pad + displacements + optional normalisation
+        # 3. preprocess: pad + displacements + optional normalisation
         obs_batch, last_positions, valid_indices = [], [], []
         for i, agent in enumerate(agents):
             hist = histories.get(agent.agent_id)
@@ -181,11 +183,11 @@ class PluginBasicLSTMPredictor(PredictionStrategy):
         if obs_batch:
             obs_tensor = self._torch.stack(obs_batch).to(self._device)  # [B, obs_len-1, 2]
 
-            # 3. LSTM inference
+            # 4. LSTM inference
             with self._torch.no_grad():
                 pred_disp = self._model(obs_tensor, self._pred_len)      # [B, pred_len, 2]
 
-            # 4. postprocess: cumsum displacements → absolute positions
+            # 5. postprocess: cumsum displacements → absolute positions
             pred_disp = pred_disp.cpu().numpy()
 
             for batch_idx, agent_idx in enumerate(valid_indices):
