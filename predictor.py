@@ -12,6 +12,35 @@ from .settings import ExtensionSettings
 log = logging.getLogger(__name__)
 
 _CHECKPOINT = ExtensionSettings.checkpoint
+_DEFAULT_FILTER_DISTANCE_M = 100.0
+
+
+def filter_agent_vehicles(
+    perception_model: PerceptionModel,
+    distance_threshold: float = _DEFAULT_FILTER_DISTANCE_M,
+) -> None:
+    """Keep only agents within *distance_threshold* of the ego vehicle."""
+    if not perception_model.ego_vehicle:
+        log.warning("Ego vehicle is not set. Cannot filter agent vehicles.")
+        return
+
+    agents = perception_model.agent_vehicles
+    if not agents:
+        return
+
+    ego_position = np.array([perception_model.ego_vehicle.x, perception_model.ego_vehicle.y])
+    agent_positions = np.array([[agent.x, agent.y] for agent in agents])
+    mask = np.linalg.norm(agent_positions - ego_position, axis=1) < distance_threshold
+
+    if not np.any(mask):
+        perception_model.agent_vehicles = []
+    else:
+        perception_model.agent_vehicles = list(np.array(agents, dtype=object)[mask])
+
+
+def agent_sizes_as_np(agents) -> np.ndarray:
+    """Return ``[length, width, theta]`` per agent as ``[N, 3]``."""
+    return np.array([[agent.length, agent.width, agent.theta] for agent in agents])
 
 
 class HistoryBuffer:
@@ -153,6 +182,7 @@ class PluginBasicLSTMPredictor(PredictionStrategy):
             raise
 
     def predict(self, perception_model: PerceptionModel) -> PerceptionModel:
+        filter_agent_vehicles(perception_model)
         agents = perception_model.agent_vehicles
         if not agents:
             perception_model.prediction = None
