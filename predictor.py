@@ -5,7 +5,8 @@ from collections import deque
 import numpy as np
 
 from avlite.c10_perception.c12_perception_strategy import PredictionStrategy
-from avlite.c10_perception.c11_perception_model import PerceptionModel, PredictionMode
+from avlite.c10_perception.c11_perception_model import PerceptionModel, SingleTrajectory
+from avlite.c10_perception.c19_settings import PerceptionSettings
 from .settings import ExtensionSettings
 
 log = logging.getLogger(__name__)
@@ -154,7 +155,7 @@ class PluginBasicLSTMPredictor(PredictionStrategy):
     def predict(self, perception_model: PerceptionModel) -> PerceptionModel:
         agents = perception_model.agent_vehicles
         if not agents:
-            perception_model.trajectories = np.empty((0, self._pred_len, 2))
+            perception_model.prediction = None
             return perception_model
 
         # 1. accumulate history at model FPS
@@ -196,8 +197,13 @@ class PluginBasicLSTMPredictor(PredictionStrategy):
         log.debug(f"histories {histories}")
         log.debug(f"input obs_batch {obs_batch}")
         log.debug(f" output trajectories: {trajectories}")
-        perception_model.trajectories   = trajectories
-        perception_model.prediction_mode = PredictionMode.TRAJECTORY
+        perception_model.prediction = SingleTrajectory(
+            predict_delta_t=PerceptionSettings.c11_predict_delta_t,
+            trajectories={
+                agent.agent_id: trajectories[i]
+                for i, agent in enumerate(agents)
+            },
+        )
         log.debug("PluginBasicLSTMPredictor: %d/%d agents predicted, shape=%s",
                   len(valid_indices), n_agents, trajectories.shape)
         return perception_model

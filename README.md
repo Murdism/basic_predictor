@@ -23,7 +23,7 @@ LSTM Model
     ↓
 Trajectory Postprocessing
     ↓
-perception_model.trajectories
+perception_model.prediction  (SingleTrajectory)
 ```
 
 ### Model I/O
