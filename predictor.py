@@ -5,12 +5,42 @@ from collections import deque
 import numpy as np
 
 from avlite.c10_perception.c12_perception_strategy import PredictionStrategy
-from avlite.c10_perception.c11_perception_model import PerceptionModel, PredictionMode
+from avlite.c10_perception.c11_perception_model import PerceptionModel, SingleTrajectory
+from avlite.c10_perception.c19_settings import PerceptionSettings
 from .settings import ExtensionSettings
 
 log = logging.getLogger(__name__)
 
 _CHECKPOINT = ExtensionSettings.checkpoint
+_DEFAULT_FILTER_DISTANCE_M = 100.0
+
+
+def filter_agent_vehicles(
+    perception_model: PerceptionModel,
+    distance_threshold: float = _DEFAULT_FILTER_DISTANCE_M,
+) -> None:
+    """Keep only agents within *distance_threshold* of the ego vehicle."""
+    if not perception_model.ego_vehicle:
+        log.warning("Ego vehicle is not set. Cannot filter agent vehicles.")
+        return
+
+    agents = perception_model.agent_vehicles
+    if not agents:
+        return
+
+    ego_position = np.array([perception_model.ego_vehicle.x, perception_model.ego_vehicle.y])
+    agent_positions = np.array([[agent.x, agent.y] for agent in agents])
+    mask = np.linalg.norm(agent_positions - ego_position, axis=1) < distance_threshold
+
+    if not np.any(mask):
+        perception_model.agent_vehicles = []
+    else:
+        perception_model.agent_vehicles = list(np.array(agents, dtype=object)[mask])
+
+
+def agent_sizes_as_np(agents) -> np.ndarray:
+    """Return ``[length, width, theta]`` per agent as ``[N, 3]``."""
+    return np.array([[agent.length, agent.width, agent.theta] for agent in agents])
 
 
 class HistoryBuffer:
@@ -152,9 +182,10 @@ class PluginBasicLSTMPredictor(PredictionStrategy):
             raise
 
     def predict(self, perception_model: PerceptionModel) -> PerceptionModel:
+        filter_agent_vehicles(perception_model)
         agents = perception_model.agent_vehicles
         if not agents:
-            perception_model.trajectories = np.empty((0, self._pred_len, 2))
+            perception_model.prediction = None
             return perception_model
 
         # 1. accumulate history at model FPS
@@ -196,8 +227,13 @@ class PluginBasicLSTMPredictor(PredictionStrategy):
         log.debug(f"histories {histories}")
         log.debug(f"input obs_batch {obs_batch}")
         log.debug(f" output trajectories: {trajectories}")
-        perception_model.trajectories   = trajectories
-        perception_model.prediction_mode = PredictionMode.TRAJECTORY
+        perception_model.prediction = SingleTrajectory(
+            predict_delta_t=PerceptionSettings.c11_predict_delta_t,
+            trajectories={
+                agent.agent_id: trajectories[i]
+                for i, agent in enumerate(agents)
+            },
+        )
         log.debug("PluginBasicLSTMPredictor: %d/%d agents predicted, shape=%s",
                   len(valid_indices), n_agents, trajectories.shape)
         return perception_model
